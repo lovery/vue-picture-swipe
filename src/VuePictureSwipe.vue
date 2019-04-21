@@ -8,7 +8,7 @@
           itemprop="associatedMedia"
           itemscope
           itemtype="http://schema.org/ImageObject"
-          v-for="(item, index) in items" :src="item.src"
+          v-for="(item, index) in (items ? (maxThumbnails ? items.slice(0, maxThumbnails) : items) : null)" :src="item.src"
           v-bind:key="index">
         <a 
           v-show="nbThumbnailsDisplayed === -1 || index < nbThumbnailsDisplayed"
@@ -88,6 +88,7 @@
         ],
         type: Array
       },
+      maxThumbnails: null,
       options: {
         default: () => ({}),
         type: Object
@@ -111,54 +112,19 @@
       let that = this;
       let initPhotoSwipeFromDOM = function (gallerySelector) {
 
-        // parse slide data (url, title, size ...) from DOM elements
-        // (children of gallerySelector)
-        let parseThumbnailElements = function (el) {
-          let thumbElements = el.childNodes,
-            numNodes = thumbElements.length,
-            items = [],
-            figureEl,
-            linkEl,
-            size,
-            item;
-
-          for (let i = 0; i < numNodes; i++) {
-
-            figureEl = thumbElements[i]; // <figure> element
-
-            // include only element nodes
-            if (figureEl.nodeType !== 1) {
-              continue;
-            }
-
-            linkEl = figureEl.children[0]; // <a> element
-
-            size = linkEl.getAttribute('data-size').split('x');
-
-            // create slide object
-            item = {
-              src: linkEl.getAttribute('href'),
-              w: parseInt(size[0], 10),
-              h: parseInt(size[1], 10),
-              title: linkEl.getAttribute('title')
-            };
-
-
-            if (figureEl.children.length > 1) {
-              // <figcaption> content
-              item.title = figureEl.children[1].innerHTML;
-            }
-
-            if (linkEl.children.length > 0) {
-              // <img> thumbnail element, retrieving thumbnail url
-              item.msrc = linkEl.children[0].getAttribute('src');
-            }
-
-            item.el = figureEl; // save link to element for getThumbBoundsFn
-            items.push(item);
+        let deriveItems = function (el) {
+          if (!that.items) {
+            return [];
           }
 
-          return items;
+          return that.items.map((item, index) => ({
+            el: el.childNodes[index],
+            h: item.h,
+            msrc: item.thumbnail,
+            src: item.src,
+            title: item.title,
+            w: item.w
+          }));
         };
 
         // find nearest parent element
@@ -202,7 +168,6 @@
             nodeIndex++;
           }
 
-
           if (index >= 0) {
             // open PhotoSwipe if valid index found
             openPhotoSwipe(index, clickedGallery);
@@ -244,7 +209,7 @@
             options,
             items;
 
-          items = parseThumbnailElements(galleryElement);
+          items = deriveItems(galleryElement);
 
           // define options (if needed)
           options = {
@@ -254,9 +219,15 @@
 
             getThumbBoundsFn: function (index) {
               // See Options -> getThumbBoundsFn section of documentation for more info
-              let thumbnail = items[index].el.getElementsByTagName('img')[0], // find thumbnail
-                pageYScroll = window.pageYOffset || document.documentElement.scrollTop,
-                rect = thumbnail.getBoundingClientRect();
+
+              let pageYScroll = window.pageYOffset || document.documentElement.scrollTop;
+
+              if (!items[index] || !items[index].el) {
+                return {x: 0, y: pageYScroll, w: 100};
+              }
+
+              let thumbnail = items[index].el.getElementsByTagName('img')[0]; // find thumbnail
+              let rect = thumbnail.getBoundingClientRect();
 
               return {x: rect.left, y: rect.top + pageYScroll, w: rect.width};
             }
